@@ -30,7 +30,7 @@ tools = [
         "type": "function",
         "function": {
             "name": "calculate_total",
-            "description": "Calculate total price using price and quantity.",
+            "description": "Calculate the total price using price and quantity.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -50,21 +50,22 @@ tools = [
 ]
 
 
-# --------------------------------------------------
-# User request
-# --------------------------------------------------
+# -----------------------------------
+# User Request
+# -----------------------------------
 
 messages = [
     {
         "role": "user",
-        "content": "Calculate the total price for 5 items costing 200 each."
+        "content": "I bought 2 items and each item costs 500. Calculate the total."
     }
 ]
 
 
-# --------------------------------------------------
-# Send request to LLM
-# --------------------------------------------------
+# -----------------------------------
+# DAY 31
+# Send Tool Definition to LLM
+# -----------------------------------
 
 response = client.chat.completions.create(
     model="openrouter/free",
@@ -73,55 +74,94 @@ response = client.chat.completions.create(
     tool_choice="auto"
 )
 
-
-# --------------------------------------------------
-# Read LLM response
-# --------------------------------------------------
-
-assistant_message = response.choices[0].message
-
-print("\n========== LLM RESPONSE ==========")
-
-if assistant_message.content:
-    print(assistant_message.content)
+message = response.choices[0].message
 
 
-# --------------------------------------------------
-# Check for tool call
-# --------------------------------------------------
+print("========== DAY 31 ==========")
 
-if assistant_message.tool_calls:
+print("\nLLM Tool Call:")
 
-    print("\n========== TOOL CALL ==========")
+if not message.tool_calls:
+    print(message.content)
+    exit()
 
-    for tool_call in assistant_message.tool_calls:
+tool_call = message.tool_calls[0]
 
-        function_name = tool_call.function.name
+print("Tool Name:", tool_call.function.name)
+print("Arguments:", tool_call.function.arguments)
 
-        arguments = json.loads(
-            tool_call.function.arguments
+
+# -----------------------------------
+# DAY 32
+# Tool Execution Router
+# -----------------------------------
+
+def execute_tool(tool_call):
+
+    tool_name = tool_call.function.name
+
+    arguments = json.loads(
+        tool_call.function.arguments
+    )
+
+    print("\n========== DAY 32 ==========")
+
+    print("Executing Tool:", tool_name)
+    print("Arguments:", arguments)
+
+    # Route to correct local function
+    if tool_name == "calculate_total":
+
+        result = calculate_total(
+            arguments["price"],
+            arguments["quantity"]
         )
 
-        print("Function:", function_name)
-        print("Arguments:", arguments)
+        return result
 
-        # --------------------------------------------------
-        # Execute local function
-        # --------------------------------------------------
+    else:
+        raise ValueError(
+            f"Unknown tool: {tool_name}"
+        )
 
-        if function_name == "calculate_total":
 
-            price = arguments["price"]
-            quantity = arguments["quantity"]
+# -----------------------------------
+# DAY 32
+# Execute Tool
+# -----------------------------------
 
-            result = calculate_total(
-                price,
-                quantity
-            )
+tool_result = execute_tool(tool_call)
 
-            print("\n========== TOOL OUTPUT ==========")
-            print("Total Price:", result)
+print("Tool Result:", tool_result)
 
-else:
 
-    print("\nNo tool call was generated.")
+# -----------------------------------
+# DAY 32
+# Send Tool Result Back to LLM
+# -----------------------------------
+
+messages.append(message)
+
+messages.append(
+    {
+        "role": "tool",
+        "tool_call_id": tool_call.id,
+        "content": str(tool_result)
+    }
+)
+
+
+# -----------------------------------
+# Get Final LLM Response
+# -----------------------------------
+
+final_response = client.chat.completions.create(
+    model="openrouter/free",
+    messages=messages
+)
+
+final_message = final_response.choices[0].message
+
+
+print("\n========== FINAL RESPONSE ==========")
+print(final_message.content)
